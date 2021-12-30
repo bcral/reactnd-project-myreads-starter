@@ -18,20 +18,36 @@ class BooksApp extends Component {
     {title: "Read", name: 'read'}
   ]
 
+  changeShelf = (shelf, book) => {
+    if (book.shelf !== '') {
+      BooksAPI.update(book, shelf).then((res) =>
+      BooksAPI.getAll().then((booksObj) => this.setState({
+        books: booksObj
+      }))
+    )
+    } else if (book.shelf === 'none') {
+      console.log('add this one!')
+    }
+  }
+
   componentDidMount() {
-    BooksAPI.getAll().then((booksObj) => this.setState({
-      books: booksObj
-    }));
+    try {
+      BooksAPI.getAll().then((booksObj) => this.setState({
+        books: booksObj
+      }));
+    } catch(e) {
+      console.log(e);
+    }
   }
 
   render() {
     return (
       <div className="app">
         <Routes>
-          <Route exact path='/' element={<Shelves books={this.state.books} shelves={this.shelves} />}
+          <Route exact path='/' element={<Shelves changeShelf={this.changeShelf} books={this.state.books} shelves={this.shelves} />}
           />
 
-          <Route path='/search' element={<SearchDisplay/>}
+          <Route path='/search' element={<SearchDisplay changeShelf={this.changeShelf} shelves={this.shelves} />}
           />
         </Routes>
       </div>
@@ -57,10 +73,13 @@ class Shelves extends Component {
         <div className="list-books-content">
           <div>
             {this.props.shelves.map(shelf => 
-              <Shelf key={shelf.name} books={this.sorter(this.props.books, shelf)} shelf={shelf} />
+              <Shelf key={shelf.name} books={this.sorter(this.props.books, shelf)} changeShelf={this.props.changeShelf} shelfName={shelf.title} shelves={this.props.shelves} />
               )
             }
           </div>
+        </div>
+        <div className="open-search">
+          <Link to="/search">Add a book</Link>
         </div>
       </div>
     )
@@ -69,18 +88,16 @@ class Shelves extends Component {
 
 class Shelf extends Component {
 
-
-
   render() {
 
     return (
       <div className="bookshelf">
-        <h2 className="bookshelf-title">{this.props.shelf.title}</h2>
+        <h2 className="bookshelf-title">{this.props.shelfName}</h2>
         <div className="bookshelf-books">
           <ol className="books-grid">
             {this.props.books.map(b =>
               <li key={b.id}>
-                <Book books={b}></Book>
+                <Book books={b} shelves={this.props.shelves} changeShelf={this.props.changeShelf}></Book>
               </li>)}
           </ol>
         </div>
@@ -95,7 +112,7 @@ class BookGrid extends Component {
       <ol className="books-grid">
         {this.props.books.map(b =>
           <li key={b.id}>
-            <Book books={b}></Book>
+            <Book books={b} changeShelf={this.props.changeShelf} shelves={this.props.shelves} ></Book>
           </li>
         )}
       </ol>
@@ -105,16 +122,16 @@ class BookGrid extends Component {
 
 class Book extends Component {
   render() {
-    const {books} = this.props
+    const { books } = this.props
 
     return (
       <div className="book">
         <div className="book-top">
-          <div className="book-cover" style={{ width: 128, height: 193, backgroundImage: `url(${books.imageLinks.thumbnail})` }}></div>
-          <Mover></Mover>
+          <div className="book-cover" style={{ width: 128, height: 193, backgroundImage: `url(${books.imageLinks ? books.imageLinks.thumbnail : ''})` }}></div>
+          <Mover book={books} changeShelf={this.props.changeShelf} shelves={this.props.shelves} ></Mover>
         </div>
         <div className="book-title">{books.title}</div>
-        <div className="book-authors">{books.authors.toString()}</div>
+        <div className="book-authors">{books.authors}</div>
       </div>
     )
   }
@@ -124,11 +141,14 @@ class Mover extends Component {
   render() {
     return (
       <div className="book-shelf-changer">
-      <select>
+      <select value={this.props.book.shelf} onChange={(event) => this.props.changeShelf(event.target.value, this.props.book)}>
         <option value="move" disabled>Move to...</option>
-        <option value="currentlyReading">Currently Reading</option>
-        <option value="wantToRead">Want to Read</option>
-        <option value="read">Read</option>
+
+        {this.props.shelves.map(s =>
+          <option key={s.name} value={s.name} >
+            {s.title}</option>
+        )}
+
         <option value="none">None</option>
       </select>
     </div>
@@ -146,19 +166,34 @@ class SearchDisplay extends Component {
     };
   }
 
-  onSearch = (event) => {
-    this.setState({
-      search: event.target.value
-    })
+  search = (event) => {
+    try {
+      BooksAPI.search(event.target.value).then((booksObj) => {
+        console.log(booksObj)
+        if (booksObj === undefined || booksObj.error) {
+          this.setState({
+            search: []
+          })
+        } else {
+          this.setState({
+            search: booksObj
+          })
+        }
+      })
+    } catch(e) {
+      console.log(e)
+    }
   }
 
   render() {
     return (
       <div className="search-books">
-        <SearchBar onSearch={this.onSearch} />
-        <div className="search-books-results">
-          <BookGrid books={this.state.search} />
-        </div>
+        <SearchBar onSearch={(event) => this.search(event)} />
+        {this.state.search !== [] && (
+          <div className="search-books-results">
+            <BookGrid books={this.state.search} shelves={this.props.shelves} changeShelf={this.props.changeShelf} />
+          </div>
+        )}
       </div>
     )
   }
@@ -179,20 +214,12 @@ class SearchBar extends Component {
             However, remember that the BooksAPI.search method DOES search by title or author. So, don't worry if
             you don't find a specific author or title. Every search is limited by search terms.
           */}
-          <input type="text" placeholder="Search by title or author"/>
+          <input onChange={(event) => this.props.onSearch(event)} type="text" placeholder="Search by title or author"/>
 
         </div>
       </div>
     )
   }
 }
-
-// class Name extends Component {
-//   render() {
-//     return (
-//       <div></div>
-//     )
-//   }
-// }
 
 export default BooksApp
