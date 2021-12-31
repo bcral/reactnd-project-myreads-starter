@@ -19,15 +19,19 @@ class BooksApp extends Component {
   ]
 
   changeShelf = (shelf, book) => {
-    if (book.shelf !== '') {
-      BooksAPI.update(book, shelf).then((res) =>
-      BooksAPI.getAll().then((booksObj) => this.setState({
-        books: booksObj
-      }))
+    BooksAPI.update(book, shelf).then(() => {
+      // BooksAPI.getAll().then((booksObj) => this.setState({
+      //   books: booksObj
+      // }))
+      let newBooks = this.state.books.map(b => {
+        if (b.id === book.id) b.shelf = shelf
+        return b
+      })
+
+      this.setState({
+        books: newBooks
+      })}
     )
-    } else if (book.shelf === 'none') {
-      console.log('add this one!')
-    }
   }
 
   componentDidMount() {
@@ -47,7 +51,7 @@ class BooksApp extends Component {
           <Route exact path='/' element={<Shelves changeShelf={this.changeShelf} books={this.state.books} shelves={this.shelves} />}
           />
 
-          <Route path='/search' element={<SearchDisplay changeShelf={this.changeShelf} shelves={this.shelves} />}
+          <Route path='/search' element={<SearchDisplay bookState={this.state.books} changeShelf={this.changeShelf} shelves={this.shelves} />}
           />
         </Routes>
       </div>
@@ -131,17 +135,33 @@ class Book extends Component {
           <Mover book={books} changeShelf={this.props.changeShelf} shelves={this.props.shelves} ></Mover>
         </div>
         <div className="book-title">{books.title}</div>
-        <div className="book-authors">{books.authors}</div>
+        <div className="book-authors">{books.authors ? books.authors.join(', ') : ''}</div>
       </div>
     )
   }
 }
 
 class Mover extends Component {
+
+  state = {
+    bookage: this.props.book
+  }
+
+  shelfChange = (event) => {
+    let newShelf = event.target.value
+    let thisBook = this.state.bookage
+    thisBook.shelf = newShelf
+    this.setState({
+      bookage: thisBook
+    })
+
+    this.props.changeShelf(event.target.value, this.props.book)
+  }
+
   render() {
     return (
       <div className="book-shelf-changer">
-      <select value={this.props.book.shelf} onChange={(event) => this.props.changeShelf(event.target.value, this.props.book)}>
+      <select value={this.props.book.shelf ? this.props.book.shelf : 'none'} onChange={(event) => this.shelfChange(event)}>
         <option value="move" disabled>Move to...</option>
 
         {this.props.shelves.map(s =>
@@ -169,14 +189,24 @@ class SearchDisplay extends Component {
   search = (event) => {
     try {
       BooksAPI.search(event.target.value).then((booksObj) => {
-        console.log(booksObj)
         if (booksObj === undefined || booksObj.error) {
           this.setState({
             search: []
           })
         } else {
+          let sortedBooks = booksObj.map(b => {
+            this.props.bookState.forEach(book => {
+              if (book.id === b.id) {
+                book.shelf !== 'none' || book.shelf !== '' || book.shelf !== undefined ?
+                b.shelf = book.shelf :
+                b.shelf = 'none'
+              }
+            })
+            return b
+          })
+
           this.setState({
-            search: booksObj
+            search: sortedBooks
           })
         }
       })
